@@ -1,0 +1,1 @@
+The data content of this project  is licensed under the Creative Commons Attribution 1.0 Unported license, and the underlying source code used to analyze and display that content is licensed under the MIT license.
