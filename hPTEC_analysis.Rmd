@@ -1,0 +1,813 @@
+---
+title: "bddPTC_analysis"
+output:
+  html_document:
+    toc: true 
+    toc_depth: 3
+    theme: united
+date: "2025-12-03 "
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+**bddPTC_analysis**
+
+```{r read library, echo=F, warning=FALSE, message= FALSE, cache=TRUE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+Read data. Make figure for Mb uptake of bddPTC and HK2
+
+```{r library, message= FALSE, warning = FALSE, fig.height=3.5, fig.width=4}
+library(dplyr)
+library(tidyverse)
+library(openxlsx) #install.packages("openxlsx")
+library(ggplot2)
+library(add2ggplot)#install.packages("add2ggplot")
+library(ggbeeswarm)
+library(car)
+```
+
+### [**1. bddPTC vs HK2 for Mg uptake**]{.underline}
+
+```{r Mb long, message= FALSE, warning = FALSE, include=F, fig.height=3.5, fig.width=4}
+Mb1DF<-read.xlsx("Experimental_data.xlsx",  sheet = "Mb1") %>% subset(ID!="comment")
+Mb1DF$group_pub <- ifelse(Mb1DF$group=="NHK", "bddPTC", "HK2")
+Mb1DF$group_pub <- factor(Mb1DF$group_pub, levels = c("bddPTC", "HK2"))
+
+Mb1DF$std_value2  <- ifelse(Mb1DF$group=="NHK", 
+                       Mb1DF %>% subset(group=="NHK"& min==2) %>% .$value %>% mean(),
+                       Mb1DF %>% subset(group=="HK2"& min==2) %>% .$value %>% mean()) 
+Mb1DF$adjv2  <- Mb1DF$value/Mb1DF$std_value2
+Mb1DF_s <- Mb1DF %>% group_by(group_pub, min) %>% summarize(mean_adjv=mean(adjv), sd_adjv = sd(adjv), mean_adjv2=mean(adjv2), sd_adjv2 = sd(adjv2))
+
+Mb_plot <- function(DF, MAXMIN){
+ggplot(DF,aes(min, mean_adjv2, group=group_pub, color=group_pub, fill=group_pub))+
+  geom_point(aes(shape=group_pub), size=3, position=position_dodge(width=MAXMIN/100))+
+  geom_line(position=position_dodge(width=MAXMIN/100), size=1)+
+  geom_errorbar(aes(ymin = mean_adjv2 - sd_adjv2, ymax = mean_adjv2 + sd_adjv2, width = MAXMIN/25), position=position_dodge(width=MAXMIN/100))+
+  #geom_smooth(aes(color=group), method = lm, formula = y ~ poly(x, 2), size=1, se=T, alpha=0.15)+ 
+  scale_shape_manual(values=c(16,17))+
+  scale_color_manual(values = c("black", "red"))+
+  coord_cartesian(xlim=c(0, MAXMIN), ylim=c(0.95, 1.2))+
+  scale_x_continuous(breaks = c(0, 10, 30, 60, 90 ,120 ,150, 180), minor_breaks = seq(0, MAXMIN, by=2))+
+  scale_y_continuous(breaks = seq(0.95, 1.2, by = 0.05))+
+  labs(x="Time (min)", y="FITC Fluorescence (relative to baseline)")+
+  theme_classic2()+
+  theme(axis.line = element_line(color = "black", size=0.8), axis.text = element_text(color = "black", face="bold"), 
+        axis.title = element_text(color = "black", face="bold"), 
+        axis.ticks.length = unit(5, "pt"), axis.minor.ticks.length = rel(0.5),
+        legend.position = c(0.15, 0.9), legend.title = element_blank(), legend.text = element_text(size=10, face="bold"))+
+  guides(x=guide_axis(minor.ticks = T))
+}
+Mb_plot(Mb1DF_s, 120)+
+  annotate("text", x=85, y=1.17, label="RM-ANOVA, P=0.76", fontface="bold")
+```
+
+```{r, Mb1 repeted ANOVA, warning=FALSE, include=F, message=F}
+for (i in c(2,10,30,60,120)) {
+ shapiro_res <- shapiro.test(Mb1DF %>% subset(min==i) %>% .$adjv2) %>% .[["p.value"]]
+ paste0(i, "min, Shapiro p=", round(shapiro_res, digits=3)) %>% print()
+   }
+
+Mb1DF_RANOVA_DF <- Mb1DF %>%  group_by(ID, group, min) %>% summarise(adjv2) %>% pivot_wider(names_from = min, values_from = adjv2, names_prefix = "m") %>% arrange(ID)
+
+time<- factor(c("m2", "m10", "m30", "m60", "m120"), levels = c("m2", "m10", "m30", "m60", "m120"))
+idata <- as.data.frame(time)
+model <- lm(cbind(m2, m10, m30, m60, m120) ~ group, data = Mb1DF_RANOVA_DF)
+res <- Anova(model, idata = idata, idesign = ~time, type = 3 )
+summary(res, multivariate = FALSE)
+```
+
+################################# 
+
+#### **Fig2C. bddPTC vs HK2 for Mg uptake (20 min)**
+
+################################# 
+
+```{r Mb 20min data, echo=T, message= F, warning = F, fig.height=3.5, fig.width=4}
+Mb2DF<-read.xlsx("Experimental_data.xlsx",  sheet = "Mb2") %>% subset(ID!="comment" & min<20.1) #insignificant with 25min data
+Mb2DF$group_pub <- ifelse(Mb2DF$group=="NHK", "bddPTC", "HK2")
+Mb2DF$group_pub <- factor(Mb2DF$group_pub, levels = c("bddPTC", "HK2"))
+
+Mb2DF$std_value2  <- ifelse(Mb2DF$group=="NHK", 
+                       Mb2DF %>% subset(group=="NHK"& min==2) %>% .$value %>% mean(),
+                       Mb2DF %>% subset(group=="HK2"& min==2) %>% .$value %>% mean()) 
+Mb2DF$adjv2  <- Mb2DF$value/Mb2DF$std_value2
+
+Mb2DF_s <- Mb2DF %>% group_by(group_pub, min) %>% summarize(mean_adjv=mean(adjv), sd_adjv = sd(adjv), mean_adjv2=mean(adjv2), sd_adjv2 = sd(adjv2))
+
+Mb_plot2 <- function(DF, MAXMIN){
+ggplot(DF,aes(min, adjv2, group=group_pub, color=group_pub))+
+  geom_point(aes(shape=group_pub), size=2.5, position=position_dodge(width=MAXMIN/80))+
+  #geom_line(position=position_dodge(width=MAXMIN/100))+
+  #geom_errorbar(aes(ymin = mean_adjv - sd_adjv, ymax = mean_adjv + sd_adjv, width = MAXMIN/50), position=position_dodge(width=MAXMIN/100))+
+  geom_smooth(aes(color=group_pub, fill=group_pub), method = lm, size=1, se=T, alpha=0.1)+ #formula = y ~ poly(x, 2),
+  scale_shape_manual(values=c(16, 17))+
+  scale_color_manual(values = c("black", "red"))+
+  scale_fill_manual(values = c("black", "red"))+
+  coord_cartesian(ylim=c(0.85, 1.25), xlim = c(0, MAXMIN))+
+  scale_x_continuous(breaks = c(0, 5, 10, 15, 20), minor_breaks = seq(0, MAXMIN, by=1))+
+  scale_y_continuous(breaks = seq(0.85, 1.25, by = 0.1))+
+  labs(x="Time (min)", y="AFU relative to baseline")+
+  theme_classic2()+
+  theme(axis.line = element_line(color = "black", size=0.8), axis.text = element_text(color = "black", face="bold"), 
+        axis.title = element_text(color = "black", face="bold"), 
+        axis.ticks.length = unit(5, "pt"), axis.minor.ticks.length = rel(0.5),
+        legend.position = c(0.15, 0.9), legend.title = element_blank(), legend.text = element_text(size=10, face="bold"))+
+  guides(x=guide_axis(minor.ticks = T))
+}
+
+Mb_plot2(Mb2DF, 20)+  annotate("text", x=15, y=0.90, label="Linear regression, \nInteraction P=0.007")
+```
+
+################################# 
+
+#### **Fig2C. stats -\> bddPTC vs HK2 for Mg uptake (20 min)**
+
+################################# 
+
+```{r, Mb2 lm interaction, warning=FALSE, message=F}
+lm(formula=adjv2 ~ min, , data = Mb2DF %>% subset(group_pub=="bddPTC")) %>% broom::tidy()
+lm(formula=adjv2 ~ min, , data = Mb2DF %>% subset(group_pub=="HK2")) %>% broom::tidy()
+lm(formula=adjv2 ~ group_pub*min, data = Mb2DF) %>% broom::tidy()
+```
+
+```{r, Mb2 repeted ANOVA, warning=FALSE, message=F, include=F}
+#Shapiro test
+for (i in c(2,5,10,15,20)) {
+ shapiro_res <- shapiro.test(Mb2DF %>% subset(group=="NHK"&min==i) %>% .$adjv2) %>% .[["p.value"]]
+ paste0("NHK ", i, "min, Shapiro p=", round(shapiro_res, digits=3)) %>% print()
+ shapiro_res <- shapiro.test(Mb2DF %>% subset(group=="HK2"&min==i) %>% .$adjv2) %>% .[["p.value"]]
+ paste0("HK2 ", i, "min, Shapiro p=", round(shapiro_res, digits=3)) %>% print()
+}
+
+#ANCOVA
+Mb2DF_RANOVA_DF <- Mb2DF %>%  group_by(ID, group, min) %>% summarise(adjv2) %>% pivot_wider(names_from = min, values_from = adjv2, names_prefix = "m") %>% arrange(ID)
+
+time <- factor(c("m2", "m5", "m10", "m15", "m20"), levels = c("m2", "m5", "m10", "m15", "m20"))
+idata <- as.data.frame(time)
+model <- lm(cbind(m2, m5, m10, m15, m20) ~ group, data = Mb2DF_RANOVA_DF)
+res <- Anova(model, idata = idata, idesign = ~time, type = 3 )
+summary(res, multivariate = FALSE)
+
+library(lme4)
+library(lmerTest)
+ggplot(Mb2DF, aes(min, adjv2, grup=group, color=group))+geom_smooth()+geom_point()+ylim(c(0, 1.2))
+lm(adjv2 ~ group*min, data = Mb2DF) %>% broom::tidy()
+lmer(adjv2 ~ group*min + (1|ID), data=Mb2DF, REML=TRUE) %>% summary() %>% .$coefficients
+```
+
+```{r lm, include=F}
+#lm comparison -\> bddPTC vs HK2 for Mg uptake (20 min)
+ lm(adjv2 ~ min*group, data=Mb2DF) %>% summary() %>% .$coefficients %>% as.data.frame() 
+```
+
+```{r lme, include=F}
+#dmh<-Mb2DF_RANOVA_DF%>%pivot_longer(3:7,names_to="time", values_to="afu", names_prefix="m")
+#mh<-aov(afu~group*time, data=dmh)
+#summary(mh)
+#lmer
+library(lme4) #install.packages("lme4")
+library(lmerTest) #install.packages("lmerTest")
+ lmer(value ~ min*group + (1|ID), data=Mb2DF) %>% summary() %>% .$coefficients %>% as.data.frame() 
+ lmer(adjv ~ min*group + (1|ID), data=Mb2DF) %>% summary() %>% .$coefficients %>% as.data.frame() 
+```
+
+### [**2. Dynasore andProchlorperazine**]{.underline}
+
+################################# 
+
+#### **Fig2E. Mg uptake with dynasore**
+
+```{r Dyna plot, message= FALSE, warning = FALSE, fig.height=3.5, fig.width=4}
+DynaDF <- read.xlsx("Experimental_data.xlsx",  sheet = "Dyna") %>% subset(ID!="comment")
+DynaDF$group_pub <- ifelse(DynaDF$group=="NHK_Mb_Dy10", "Dynasore", 
+                     ifelse(DynaDF$group=="NHK_Mb_Dy50", "Dynasore 50μM", 
+                      ifelse(DynaDF$group=="NHK", "NHK", 
+                       ifelse(DynaDF$group=="NHK_Mb", "NHK_Mb", 
+                        ifelse(DynaDF$group=="onlyMb", "onlyMb", 
+                         ifelse(DynaDF$group=="NHK_Mb_PCP", "Prochlorperazine", 
+                          ifelse(DynaDF$group=="NHK_Mb_Veh", "Vehicle", "")))))))                        
+DynaDF$group_pub <- factor(DynaDF$group_pub, levels = c("onlyMb", "NHK", "NHK_Mb","Vehicle", "Dynasore", "Dynasore 50μM", "Prochlorperazine"))
+
+DynaDF$group_pub2 <- ifelse(DynaDF$group=="NHK_Mb_Dy10", "Dynasore 10μM", 
+                      ifelse(DynaDF$group=="NHK_Mb_Dy50", "Dynasore 50μM", 
+                          ifelse(DynaDF$group=="NHK_Mb_Veh", "Vehicle", NA)))                     
+DynaDF$group_pub2 <- factor(DynaDF$group_pub2, levels = c("Vehicle", "Dynasore 10μM", "Dynasore 50μM", NA))
+
+DynaDF$std_value2  <- ifelse(DynaDF$group=="NHK_Mb_Dy10", DynaDF %>% subset(group=="NHK_Mb_Dy10"& min==2) %>% .$value %>% mean(),
+                       ifelse(DynaDF$group=="NHK_Mb_Dy50", DynaDF %>% subset(group=="NHK_Mb_Dy50"& min==2) %>% .$value %>% mean(),
+                        ifelse(DynaDF$group=="NHK", DynaDF %>% subset(group=="NHK"& min==2) %>% .$value %>% mean(),
+                         ifelse(DynaDF$group=="NHK_Mb", DynaDF %>% subset(group=="NHK_Mb"& min==2) %>% .$value %>% mean(),
+                          ifelse(DynaDF$group=="onlyMb", DynaDF %>% subset(group=="onlyMb"& min==2) %>% .$value %>% mean(),
+                           ifelse(DynaDF$group=="NHK_Mb_PCP", DynaDF %>% subset(group=="NHK_Mb_PCP"& min==2) %>% .$value %>% mean(),                                         ifelse(DynaDF$group=="NHK_Mb_Veh", DynaDF %>% subset(group=="NHK_Mb_Veh"& min==2) %>% .$value %>% mean(), NA)))))))
+
+DynaDF$adjv2  <- DynaDF$value/DynaDF$std_value2
+NHKwoMb_ave_DF <- DynaDF %>% subset(group=="NHK") %>% group_by(min) %>% summarise(woMb_ave=mean(adjv2))
+DynaDF2 <- left_join(DynaDF, NHKwoMb_ave_DF, by="min")
+DynaDF2$adjv3 <- DynaDF2$adjv2/DynaDF2$woMb_ave
+
+DynaDF2_s <- DynaDF2 %>% group_by(group_pub, group_pub2, min) %>% summarize(mean_adjv=mean(adjv), sd_adjv = sd(adjv), 
+                                                                mean_adjv2=mean(adjv2), sd_adjv2 = sd(adjv2),
+                                                                mean_adjv3=mean(adjv3), sd_adjv3 = sd(adjv3))
+
+
+shapeset1 <- c(15,16,17,17,14,16,20)
+colorset1 <- c("gray30","orange","darkred","red","chartreuse4","darkgreen","deepskyblue")
+
+Dyna_plot <- function(DF, GROUP_PUB, MEAN, SD, MAXMIN, SHAPESET, COLORSET){
+ggplot(DF,aes(min, {{MEAN}}, group={{GROUP_PUB}}, color={{GROUP_PUB}}, fill={{GROUP_PUB}}))+
+  geom_point(aes(shape={{GROUP_PUB}}), size=3, position=position_dodge(width=MAXMIN/100))+
+  geom_smooth(method = lm, formula = y ~ poly(x, 2), size=1, se=T, alpha=0.2)+ #locally weighted scatter plot smooth
+  geom_errorbar(aes(ymin = {{MEAN}} - {{SD}}, ymax = {{MEAN}} + {{SD}}, width = MAXMIN/50), position=position_dodge(width=MAXMIN/100))+
+  scale_shape_manual(values=SHAPESET)+
+  scale_color_manual(values=COLORSET)+
+  scale_fill_manual(values=COLORSET)+
+  coord_cartesian(xlim=c(0, MAXMIN), ylim=c(0.95, 1.2))+
+  theme_classic2()+
+  scale_x_continuous(breaks = c(0, 30, 60, 90 ,120 ,150, 180), minor_breaks = seq(0, MAXMIN, by=2))+
+  scale_y_continuous(breaks = seq(0.85, 1.2, by = 0.05))+
+  labs(x="Time (min)", y="AFU relative to baseline")+
+  theme_classic2()+
+  theme(axis.line = element_line(color = "black", size=0.8), axis.text = element_text(color = "black", face="bold"), 
+        axis.title = element_text(color = "black", face="bold"), 
+        axis.ticks.length = unit(5, "pt"), axis.minor.ticks.length = rel(0.5),
+        legend.position = c(0.25, 0.83), legend.title = element_blank(), legend.text = element_text(size=10, face="bold"))+
+  guides(x=guide_axis(minor.ticks = T))
+}
+
+
+shapeset2 <- c(16, 15)
+colorset2 <- c("black", "darkgreen")
+Dyna_plot(DynaDF2_s %>% subset(group_pub=="Vehicle"|group_pub=="Dynasore"), group_pub, mean_adjv3, sd_adjv3, 180, shapeset2, colorset2)+
+  annotate("text", x=140, y=1.02, label="RM-ANOVA, \nInteraction P<0.001")
+```
+
+```{r, other dyna plot, include=F}
+Dyna_plot(DynaDF2_s, group_pub, mean_adjv2, sd_adjv2, 180, shapeset1, colorset1)
+Dyna_plot(DynaDF2_s, group_pub, mean_adjv3, sd_adjv3, 180, shapeset1, colorset1)
+shapeset2B <- c(16, 15, 15)
+colorset2B <- c("black", "darkgreen", "chartreuse4")
+Dyna_plot(DynaDF2_s %>% subset(!is.na(group_pub2)), group_pub2, mean_adjv3, sd_adjv3, 180, shapeset2B, colorset2B)+
+  annotate("text", x=120, y=0.98, label="RM-ANOVA, P<0.001")
+```
+
+################################# 
+
+#### **Fig2E. stats**
+
+################################# 
+
+```{r, Dyna repeted ANOVA, warning=FALSE, message=F}
+DynaDF3 <- DynaDF2 %>% subset(group=="NHK_Mb"|group=="NHK_Mb_Dy10") %>% mutate("min2"=min^0.5)
+#Shapiro test
+for (i in c(2,10,20,30,60,90,120,150,180)) {
+ shapiro_res <- shapiro.test(DynaDF3 %>% subset(group=="NHK_Mb"&min==i) %>% .$adjv2) %>% .[["p.value"]]
+ paste0("NHK ", i, "min, Shapiro p=", round(shapiro_res, digits=4)) %>% print()
+ shapiro_res <- shapiro.test(DynaDF3 %>% subset(group=="NHK_Mb_Dy10"&min==i) %>% .$adjv2) %>% .[["p.value"]]
+ paste0("D10 ", i, "min, Shapiro p=", round(shapiro_res, digits=4)) %>% print()
+}
+
+DynaDF3_RANOVA_DF <- DynaDF3 %>%  group_by(ID, group, min) %>% summarise(adjv3) %>% pivot_wider(names_from = min, values_from = adjv3, names_prefix = "m") %>% arrange(ID)
+
+#RM-ANOVA
+time<- factor(c("m2", "m10", "m20", "m30", "m60", "m90", "m120", "m150", "m180"), levels = c("m2", "m10", "m20", "m30", "m60", "m90", "m120", "m150", "m180"))
+idata <- as.data.frame(time)
+model <- lm(cbind(m2, m10, m20, m30, m60, m90, m120, m150, m180) ~ group, data = DynaDF3_RANOVA_DF)
+res <- Anova(model, idata = idata, idesign = ~time, type = 3 )
+summary(res, multivariate = FALSE)
+```
+```{r, Dyna compare with time^1/2, include=F}
+ggplot(DynaDF3, aes(min^0.5, adjv3, grup=group_pub, color=group_pub))+geom_smooth(method = "lm")+geom_point()
+lm(adjv3 ~ group_pub*min2, data = DynaDF3) %>% broom::tidy()
+lmer(adjv3 ~ group_pub*min2 + (1|ID), data=DynaDF3, REML=TRUE) %>% summary() %>% .$coefficients
+```
+
+```{r, Dyna repeted ANOVA2, warning=FALSE, message=F, include=F}
+library(emmeans) #install.packages("emmeans")
+DynaDF3_long <- DynaDF3 %>% dplyr::select(ID, group, min, adjv3) %>% mutate(min = factor(min, levels = c(2,10,20,30,60,90,120,150,180))) 
+aov_model <- aov(adjv3 ~ group*min + Error(ID/min), data = DynaDF3_long)
+emm <- emmeans(aov_model, ~ group)
+pairs(emm, adjust = "tukey")
+```
+
+################################# 
+
+#### **Fig2F. Mg uptake with** **Prochlorperazine**
+
+################################# 
+
+```{r PCP plot, message= FALSE, warning = FALSE, fig.height=3.5, fig.width=4}
+shapeset3 <- c(16,15)
+colorset3 <- c("black", "blue")
+Dyna_plot(DynaDF2_s %>% subset(group_pub=="Vehicle"|group_pub=="Prochlorperazine"), group_pub, mean_adjv3, sd_adjv3, 180, shapeset3, colorset3) +
+  annotate("text", x=130, y=1.03, label="RM-ANOVA, \nInteraction P<0.001")
+```
+
+################################# 
+
+#### **Fig2F. stats**
+
+################################# 
+
+```{r, PCP repeted ANOVA, warning=FALSE, message=F}
+PCPDF <- DynaDF2 %>% subset(group=="NHK_Mb"|group=="NHK_Mb_PCP") %>% mutate("min2"=min^0.5)
+#Shapiro test
+for (i in c(2,10,20,30,60,90,120,150,180)) {
+ shapiro_res <- shapiro.test(PCPDF %>% subset(group=="NHK_Mb"&min==i) %>% .$adjv3) %>% .[["p.value"]]
+ paste0("NHK ", i, "min, Shapiro p=", round(shapiro_res, digits=4)) %>% print()
+ shapiro_res <- shapiro.test(PCPDF %>% subset(group=="NHK_Mb_PCP"&min==i) %>% .$adjv3) %>% .[["p.value"]]
+ paste0("PCP ", i, "min, Shapiro p=", round(shapiro_res, digits=4)) %>% print()
+ }
+
+#RM-ANOVA
+PCPDF_RANOVA_DF <- PCPDF %>%  group_by(ID, group, min) %>% summarise(adjv2) %>% pivot_wider(names_from = min, values_from = adjv2, names_prefix = "m") %>% arrange(ID)
+
+time<- factor(c("m2", "m10", "m20", "m30", "m60", "m90", "m120", "m150", "m180"), levels = c("m2", "m10", "m20", "m30", "m60", "m90", "m120", "m150", "m180"))
+idata <- as.data.frame(time)
+model <- lm(cbind(m2, m10, m20, m30, m60, m90, m120, m150, m180) ~ group, data = PCPDF_RANOVA_DF)
+res <- Anova(model, idata = idata, idesign = ~time, type = 3 )
+summary(res, multivariate = FALSE) 
+```
+```{r, PCP compare with time^1/2, include=F}
+ggplot(PCPDF, aes(min2, adjv3, grup=group_pub, color=group_pub))+geom_smooth(method = "lm")+geom_point()
+lm(adjv3 ~ group_pub*min2, data = PCPDF) %>% broom::tidy()
+lmer(adjv3 ~ group_pub*min2 + (1|ID), data=PCPDF, REML=TRUE) %>% summary() %>% .$coefficients
+```
+
+```{r Dyna plot2, message= FALSE, warning = FALSE, include=F,  fig.height=3.5, fig.width=4}
+#Mg uptake with Dyansore/PCP (short time)
+Dyna_plot2 <- function(DF, MEAN, SD, MAXMIN, SHAPESET, COLORSET){
+ggplot(DF,aes(min, {{MEAN}}, group=group_pub, color=group_pub, fill=group_pub))+
+  geom_point(aes(shape=group_pub), size=3, position=position_dodge(width=MAXMIN/100))+
+  #geom_line(position=position_dodge(width=MAXMIN/100))+
+  geom_smooth(method = lm, formula = y ~ poly(x, 2), size=1, se=T, alpha=0.2)+ #locally weighted scatter plot smooth
+  geom_errorbar(aes(ymin = {{MEAN}} - {{SD}}, ymax = {{MEAN}} + {{SD}}, width = MAXMIN/50), position=position_dodge(width=MAXMIN/100))+
+  scale_shape_manual(values=SHAPESET)+
+  scale_color_manual(values=COLORSET)+
+  scale_fill_manual(values=COLORSET)+
+  coord_cartesian(xlim=c(0, MAXMIN), ylim=c(0.95, 1.05))+
+  theme_classic2()+
+  scale_x_continuous(breaks = c(0, 5 ,10, 15, 20), minor_breaks = seq(0, MAXMIN, by=2))+
+  scale_y_continuous(breaks = seq(0.95, 1.2, by = 0.05))+
+  labs(x="Time (min)", y="FITC Fluorescence (relative to baseline)")+
+  theme_classic2()+
+  theme(axis.line = element_line(color = "black", size=0.8), axis.text = element_text(color = "black", face="bold"), 
+        axis.title = element_text(color = "black", face="bold"), 
+        axis.ticks.length = unit(5, "pt"), axis.minor.ticks.length = rel(0.5),
+        legend.position = c(0.25, 0.8), legend.title = element_blank(), legend.text = element_text(size=10, face="bold"))+
+  guides(x=guide_axis(minor.ticks = T))
+}
+
+Dyna_plot2(DynaDF2_s %>% subset(group_pub=="Vehicle"|group_pub=="Dynasore 10μM"|group_pub=="Dynasore 50μM") %>% subset(min<21), mean_adjv3, sd_adjv3, 20, shapeset2, colorset2)
+Dyna_plot2(DynaDF2_s %>% subset(group_pub=="Vehicle"|group_pub=="Prochlorperazine") %>% subset(min<21), mean_adjv3, sd_adjv3, 20, shapeset3, colorset3)
+```
+
+### [**3. LRP2 western blot**]{.underline}
+
+#### **Fig2B. LRP2 western blot**
+
+################################# 
+
+```{r LRP2WB, warning=F, message=F, fig.height=3.5, fig.width=4}
+LRP2WBDF<-read.xlsx("Experimental_data.xlsx",  sheet = "LRP2WB") %>% subset(ID!="comment" & group!="PC1" & group!="PC2")
+LRP2WBDF$group_pub <- ifelse(LRP2WBDF$group=="hNSKC_p0", "bddKC", 
+                      ifelse(LRP2WBDF$group=="hPTEC", "bddPTC", 
+                       ifelse(LRP2WBDF$group=="HK2", "HK2", "others")))
+LRP2WBDF$group_pub <- factor(LRP2WBDF$group_pub, levels=c("bddKC", "bddPTC", "HK2"))
+
+ggplot(LRP2WBDF, aes(group_pub, adjv))+
+  geom_boxplot()+
+  geom_quasirandom(aes(shape=group_pub), position=position_jitter(height = 0), size=3, width=0.15)+
+  #scale_color_manual(values = c("darkred","red4", "red", "blue"))+
+  scale_shape_manual(values=c(18, 16, 17))+
+  coord_cartesian(ylim=c(0, 2))+
+  #scale_y_continuous(breaks = seq(0.90, 1.15, by = 0.05))+
+  labs(x="", y="Protein amount (fold change)")+
+  theme_classic2()+
+  theme(axis.line = element_line(color = "black", size=0.8), 
+        axis.text = element_text(color = "black", face="bold", size=12), 
+        axis.title = element_text(color = "black", face="bold"), 
+        legend.position = "none", legend.title = element_blank(), legend.text = element_text(size=12, face="bold"))+
+  annotate("text", x=3, y=1.3, label="ANOVA\nP=0.02", size=3.5)#, fontface="bold")
+
+```
+
+################################# 
+
+#### **Fig2B. stats**
+
+################################# 
+
+```{r, LRP2 ANOVA, message=FALSE}
+#mean(SD)
+LRP2WBDF %>% group_by(group) %>% summarize(mean=mean(adjv), sd=sd(adjv))
+
+#ANOVA aand Tukey
+model<- aov(adjv ~ group, data = LRP2WBDF)
+model %>% summary()
+TukeyHSD(model)
+```
+
+################################# 
+
+### [**4. LRP2 qPCR with siRNA**]{.underline}
+
+#### **Fig3c. LRP2 mRNA with siRNA**
+
+################################# 
+
+```{r qPCR siRNA, message=F, warning=F, fig.height=3.5, fig.width=4}
+qpcrDF<-read.xlsx("Experimental_data.xlsx",  sheet = "siRNA_qPCR") %>% subset(ID!="comment")
+qpcrDF$group_pub <- ifelse(qpcrDF$group=="NHK sc", "bddPTC\n+scramble RNA", 
+                     ifelse(qpcrDF$group=="NHK KO", "bddPTC\n+siRNA", 
+                      ifelse(qpcrDF$group=="HK2", "HK2\n+scramble RNA", "ohter")))
+qpcrDF$group_pub <- factor(qpcrDF$group_pub, levels = c("bddPTC\n+scramble RNA", "bddPTC\n+siRNA", "HK2\n+scramble RNA"))
+
+ggplot(qpcrDF, aes(group_pub, adjv))+
+  geom_boxplot()+
+  geom_quasirandom(aes(shape=group_pub), position=position_jitter(height = 0), size=3, width=0.15)+
+  scale_shape_manual(values=c(16, 15, 17))+
+  coord_cartesian(ylim=c(0, 1.5))+
+  labs(x="", y="mRNA expression (fold change)")+
+  theme_classic2()+
+  theme(axis.line = element_line(color = "black", size=0.8), 
+        axis.text = element_text(color = "black", face="bold", size=10), 
+        axis.title = element_text(color = "black", face="bold", size=12), 
+        legend.position = "none", 
+        plot.title = element_text(hjust=0.5, size=14, face="bold.italic"))+
+  ggtitle("LRP2")+
+  annotate("text", x=3, y=0.8, label="ANOVA\nP<0.001", size=3.5)#, fontface="bold")
+```
+
+################################# 
+
+#### **Fig3C. stats**
+
+################################# 
+
+```{r, qPCR siRNA ANOVA, meassage=F}
+#ANOVA and Tukey
+model<- aov(adjv ~ group, data = qpcrDF)
+model %>% summary()
+TukeyHSD(model)
+```
+
+################################# 
+
+#### **Fig4C. Mg uptake with Lrp2 siRNA (titration)**
+
+################################# 
+
+```{r siRNA, message=F, warning=F, fig.height=4, fig.width=7}
+siDF<-read.xlsx("Experimental_data.xlsx",  sheet = "siRNA") %>% subset(ID!="comment")
+siDF$std_value2  <- ifelse(siDF$group=="NHK_DMEM_stv", siDF %>% subset(group=="NHK_DMEM_stv"& min==2) %>% .$value %>% mean(),
+                     ifelse(siDF$group=="NHK_OMEM_stv", siDF %>% subset(group=="NHK_OMEM_stv"& min==2) %>% .$value %>% mean(),
+                      ifelse(siDF$group=="NHK_Mb_DMEM_stv", siDF %>% subset(group=="NHK_Mb_DMEM_stv"& min==2) %>% .$value %>% mean(),
+                       ifelse(siDF$group=="NHK_Mb_OMEM_stv", siDF %>% subset(group=="NHK_Mb_OMEM_stv"& min==2) %>% .$value %>% mean(),
+                     ifelse(siDF$group=="NHK_Mb_scramble2uL", siDF %>% subset(group=="NHK_Mb_scramble2uL"& min==2) %>% .$value %>% mean(),                             ifelse(siDF$group=="NHK_Mb_scramble4uL", siDF %>% subset(group=="NHK_Mb_scramble4uL"& min==2) %>% .$value %>% mean(), 
+                       ifelse(siDF$group=="NHK_Mb_scramble8uL", siDF %>% subset(group=="NHK_Mb_scramble8uL"& min==2) %>% .$value %>% mean(), 
+                        ifelse(siDF$group=="NHK_Mb_scramble16uL", siDF %>% subset(group=="NHK_Mb_scramble16uL"& min==2) %>% .$value %>% mean(), 
+                      ifelse(siDF$group=="NHK_Mb_siRNA2uL", siDF %>% subset(group=="NHK_Mb_siRNA2uL"& min==2) %>% .$value %>% mean(), 
+                       ifelse(siDF$group=="NHK_Mb_siRNA4uL", siDF %>% subset(group=="NHK_Mb_siRNA4uL"& min==2) %>% .$value %>% mean(),                                   ifelse(siDF$group=="NHK_Mb_siRNA8uL", siDF %>% subset(group=="NHK_Mb_siRNA8uL"& min==2) %>% .$value %>% mean(), 
+                         ifelse(siDF$group=="NHK_Mb_siRNA16uL", siDF %>% subset(group=="NHK_Mb_siRNA16uL"& min==2) %>% .$value %>% mean(),  
+                      ifelse(siDF$group=="Mb", siDF %>% subset(group=="Mb"& min==2) %>% .$value %>% mean(), NA)))))))))))))
+
+siDF$adjv2  <- siDF$value/siDF$std_value2
+siDF$group_pub <- ifelse(siDF$group=="NHK_Mb_scramble2uL", "Scramble RNA", 
+                     ifelse(siDF$group=="NHK_Mb_scramble4uL", "Scramble RNA", 
+                      ifelse(siDF$group=="NHK_Mb_scramble8uL", "Scramble RNA", 
+                       ifelse(siDF$group=="NHK_Mb_scramble16uL", "Scramble RNA", 
+                    ifelse(siDF$group=="NHK_Mb_siRNA2uL", "LRP2 siRNA", 
+                     ifelse(siDF$group=="NHK_Mb_siRNA4uL", "LRP2 siRNA", 
+                      ifelse(siDF$group=="NHK_Mb_siRNA8uL", "LRP2 siRNA", 
+                       ifelse(siDF$group=="NHK_Mb_siRNA16uL", "LRP2 siRNA", 
+                        ifelse(siDF$group=="Mb", "onlyMb", "others")))))))))
+
+siDF$group_pub <- factor(siDF$group_pub, levels = c("Scramble RNA", "LRP2 siRNA", "others"))
+
+siDF_s <- siDF %>% group_by(group, min) %>% summarize(mean_adjv=mean(adjv), sd_adjv = sd(adjv), mean_adjv2=mean(adjv2), sd_adjv2 = sd(adjv2), group_pub=group_pub)
+
+si_plot <- function(DF, MAXMIN){
+ggplot(DF,aes(min, mean_adjv, group=group, color=group))+
+  geom_point(size=2, position=position_dodge(width=MAXMIN/100))+
+  geom_errorbar(aes(ymin = mean_adjv - sd_adjv, ymax = mean_adjv + sd_adjv, width = MAXMIN/50), position=position_dodge(width=MAXMIN/100))+
+  geom_smooth(method = lm, formula = y ~ poly(x, 2), se=F)+
+  theme_classic2()+
+  coord_cartesian(xlim=(c(0, MAXMIN)))
+}
+```
+
+################################# 
+
+```{r siRNA2, message=F, warning=F, fig.height=3.5, fig.width=4}
+si_plot2 <- function(DF, MAXMIN){
+ggplot(DF,aes(min, mean_adjv2, group=group_pub, color=group_pub, fill=group_pub))+
+  geom_point(aes(shape=group_pub), size=3, position=position_dodge(width=MAXMIN/100))+
+  #geom_line(position=position_dodge(width=MAXMIN/100))+
+  geom_errorbar(aes(ymin = mean_adjv2 - sd_adjv2, ymax = mean_adjv2 + sd_adjv2, width = MAXMIN/50), position=position_dodge(width=MAXMIN/100))+
+  geom_smooth(method=lm, formula = y ~ poly(x, 2), size=1, se=T, alpha=0.15)+
+  scale_shape_manual(values=c(16,15))+
+  scale_color_manual(values = c("black","purple4"))+
+  scale_fill_manual(values = c("black","purple4"))+
+  theme_classic2()+
+  coord_cartesian(xlim=c(0, MAXMIN), ylim=c(0.95, 1.2))+
+  scale_x_continuous(breaks = c(0, 30, 60, 90 ,120 ,150, 180), minor_breaks = seq(0, MAXMIN, by=5))+
+  scale_y_continuous(breaks = seq(0.95, 1.2, by = 0.05))+
+  labs(x="Time (min)", y="AFU relative to baseline")+
+  theme_classic2()+
+  theme(axis.line = element_line(color = "black", size=0.8), axis.text = element_text(color = "black", face="bold"), 
+        axis.title = element_text(color = "black", face="bold"), 
+        axis.ticks.length = unit(5, "pt"), axis.minor.ticks.length = rel(0.5),
+        legend.position = c(0.25, 0.8), legend.title = element_blank(), legend.text = element_text(size=10, face="bold"))+
+  guides(x=guide_axis(minor.ticks = T))
+}
+#si_plot2(siDF_s %>% subset(group=="NHK_Mb_scramble4uL"|group=="NHK_Mb_siRNA4uL"), 180)+  annotate("text", x=135, y=1.03, label="RM-ANOVA, P=0.08")+ ggtitle("Scramble RNA / siRNA, 4 uL")+ theme(plot.title = element_text(hjust=0.5, vjust=-1, face="bold"))
+
+#si_plot2(siDF_s %>% subset(group=="NHK_Mb_scramble8uL"|group=="NHK_Mb_siRNA8uL"), 180)+ annotate("text", x=135, y=1.03, label="RM-ANOVA, P=0.008")+  ggtitle("Scramble RNA / siRNA, 8 uL")+ theme(plot.title = element_text(hjust=0.5, vjust=-1, face="bold"))
+
+si_plot2(siDF_s %>% subset(group=="NHK_Mb_scramble16uL"|group=="NHK_Mb_siRNA16uL"), 180)+
+  annotate("text", x=130, y=1.02, label="RM-ANOVA, \nInteraction P<0.001")
+```
+
+################################# 
+
+#### **Figure3C. stats**
+
+################################# 
+
+```{r, siRNA repeated ANOVA, message=FALSE}
+#Shapiro test
+for (i in c(2, 10,20,30,60,90,120,150,180)) {
+ shapiro_res <- shapiro.test(siDF %>% subset(group=="NHK_Mb_scramble16uL"|group=="NHK_Mb_siRNA16uL") %>% subset(min==i) %>% .$adjv2) %>% .[["p.value"]]
+ paste0(i, "min, Shapiro p=", round(shapiro_res, digits=3)) %>% print()
+}
+
+#RM-ANOVA
+siDF_RANOVA_DF <- siDF %>% subset(group=="NHK_Mb_scramble16uL"|group=="NHK_Mb_siRNA16uL") %>%
+                            group_by(ID, group, min) %>% summarise(adjv2) %>% 
+                            pivot_wider(names_from = min, values_from = adjv2, names_prefix = "m") %>% arrange(ID)
+
+time<- factor(c("m2", "m10", "m20", "m30", "m60", "m90","m120","m150", "m180"), levels = c("m2", "m10", "m20", "m30", "m60", "m90","m120","m150", "m180"))
+idata <- as.data.frame(time)
+model <- lm(cbind(m2, m10, m20, m30, m60, m90, m120, m150, m180) ~ group, data = siDF_RANOVA_DF)
+res <- Anova(model, idata = idata, idesign = ~time, type = 3 )
+summary(res, multivariate = FALSE)
+```
+```{r, siRNA compare with time^1/2, include=F}
+siDF2 <- siDF %>% subset(group=="NHK_Mb_scramble16uL"|group=="NHK_Mb_siRNA16uL") %>% mutate("min2"=min^0.5)
+ggplot(siDF2, aes(min2, adjv2, grup=group_pub, color=group_pub))+geom_smooth(method = "lm")+geom_point()
+lm(adjv2 ~ group_pub*min2, data = siDF2) %>% broom::tidy()
+lmer(adjv2 ~ group_pub*min2 + (1|ID), data=siDF2, REML=TRUE) %>% summary() %>% .$coefficients
+```
+
+```{r siRNA3, message=F, warning=F, include=F, fig.height=3.5, fig.width=4}
+#Mg uptake with Megaline-siRNA16uL (short time)
+si_plot3 <- function(DF, MAXMIN){
+ggplot(DF,aes(min, mean_adjv2, group=group_pub, fill=group_pub))+
+  geom_point(aes(shape=group_pub), size=3, position=position_dodge(width=MAXMIN/100))+
+  geom_errorbar(aes(ymin = mean_adjv2 - sd_adjv2, ymax = mean_adjv2 + sd_adjv2, width = MAXMIN/50), position=position_dodge(width=MAXMIN/100))+
+  geom_smooth(method=lm, formula = y ~ poly(x, 2), size=1, se=T, alpha=0.15)+
+  theme_classic2()+
+  coord_cartesian(xlim=c(0, MAXMIN), ylim=c(0.95, 1.1))+
+  scale_x_continuous(breaks = c(0, 10, 20), minor_breaks = seq(0, MAXMIN, by=2))+
+  scale_y_continuous(breaks = seq(0.95, 1.1, by = 0.05))+
+  labs(x="Time (min)", y="FITC Fluorescence (relative to baseline)")+
+  theme_classic2()+
+  theme(axis.line = element_line(color = "black", size=0.8), axis.text = element_text(color = "black", face="bold"), 
+        axis.title = element_text(color = "black", face="bold"), 
+        axis.ticks.length = unit(5, "pt"), axis.minor.ticks.length = rel(0.5),
+        legend.position = c(0.25, 0.8), legend.title = element_blank(), legend.text = element_text(size=10, face="bold"))+
+  guides(x=guide_axis(minor.ticks = T))
+}
+si_plot3(siDF_s %>% subset(group=="NHK_Mb_scramble16uL"|group=="NHK_Mb_siRNA16uL") %>% subset(min<21), 20)+
+  ggtitle("Scramble RNA / siRNA, 16 uL")+ theme(plot.title = element_text(hjust=0.5, vjust=-1, face="bold"))
+```
+
+### [**5. Cilastatin**]{.underline}
+
+#### **Figure3C. Mg uptake with cilastatin**
+
+################################# 
+
+```{r cil, warning=F, message=F, fig.height=3.5, fig.width=4}
+CilDF<-read.xlsx("Experimental_data.xlsx",  sheet = "Cil") %>% subset(ID!="comment") %>% subset(`FITC-Mgb`==0|`FITC-Mgb`==5)
+CilDF$group_pub <- ifelse(CilDF$group=="Mb5_Cil0", "Vehicle", 
+                     ifelse(CilDF$group=="Mb5_Cil2", "Cilastatin\n2 mg/mL", 
+                      ifelse(CilDF$group=="Mb5_Cil20", "Cilastatin\n20 mg/mL", 
+                       ifelse(CilDF$group=="Mb5_Cil200", "Cilastatin\n200 mg/mL", "Mb0"))))                       
+CilDF$group_pub <- factor(CilDF$group_pub, levels = c("Vehicle", "Cilastatin\n2 mg/mL", "Cilastatin\n20 mg/mL", "Cilastatin\n200 mg/mL", "Mb0"))
+
+CilDF$std_value <- ifelse(CilDF$Cil==0, CilDF %>% subset(group=="Mb0_Cil0") %>% .$value %>% mean(),
+                    ifelse(CilDF$Cil==2, CilDF %>% subset(group=="Mb0_Cil2") %>% .$value %>% mean(),
+                     ifelse(CilDF$Cil==20, CilDF %>% subset(group=="Mb0_Cil20") %>% .$value %>% mean(),
+                      ifelse(CilDF$Cil==200, CilDF %>% subset(group=="Mb0_Cil200") %>% .$value %>% mean(), NA))))
+                                         
+CilDF$adj_value <- CilDF$value/CilDF$std_value
+
+ggplot(CilDF %>% subset(`FITC-Mgb`==5), aes(group_pub, adj_value))+
+  geom_boxplot()+
+  geom_quasirandom(aes(shape=group_pub), position=position_jitter(height = 0), size=3, width=0.15)+
+  scale_shape_manual(values=c(16, 15, 15, 15))+
+  coord_cartesian(ylim=c(0.90, 1.2))+
+  scale_y_continuous(breaks = seq(0.90, 1.2, by = 0.05))+
+  labs(x="", y="AFU relative to control")+
+  theme_classic2()+
+  theme(axis.line = element_line(color = "black", size=0.8), 
+        axis.text = element_text(color = "black", face="bold", size=10), 
+        axis.title = element_text(color = "black", face="bold"), 
+        legend.position = "none", legend.title = element_blank(), legend.text = element_text(size=12, face="bold"))+
+  annotate("text", x=3.8, y=1.1, label="ANOVA\nP=0.003", size=3.5)
+```
+
+################################# 
+
+#### **Fig3C. stats**
+
+################################# 
+
+```{r, cil Dunnet, meassage=F}
+#ANOVA and Dunnet
+library(DescTools) #install.packages("DescTools")
+DunnettTest(x= subset(CilDF, `FITC-Mgb`==5) %>% .$adj_value, g=subset(CilDF, `FITC-Mgb`==5) %>% .$group)
+```
+
+```{r, cil ANOVA, include=F, message=F}
+#ANOVA
+model<- aov(adj_value ~ group, data = CilDF %>% subset(`FITC-Mgb`==5))
+model %>% summary()
+TukeyHSD(model)
+```
+
+### [**6. VCAM1**]{.underline}
+
+#### **Fig4C. VCAM1 western blot**
+
+```{r VCAM1WB, warning=F, message=F, fig.height=4, fig.width=4}
+WBDF<-read.xlsx("Experimental_data.xlsx",  sheet = "VCAM1WB") %>% subset(ID!="comment" & group!="PC1" & group!="PC2")
+WBDF$group_pub <- ifelse(WBDF$group=="hNSKC_p0", "bddKC\np0", 
+                     ifelse(WBDF$group=="hNSKC_p1", "bddKC\np1", 
+                      ifelse(WBDF$group=="hPTEC", "bddPTC", 
+                       ifelse(WBDF$group=="HK2", "HK2", "others"))))
+WBDF$group_pub <- factor(WBDF$group_pub, levels=c("bddKC\np0", "bddKC\np1", "bddPTC", "HK2"))
+
+ggplot(WBDF, aes(group_pub, adjv))+
+  geom_boxplot()+
+  geom_quasirandom(aes(shape=group_pub), position=position_jitter(height = 0), size=3, width=0.15)+
+  #scale_color_manual(values = c("darkred","red4", "red", "blue"))+
+  scale_shape_manual(values=c(18, 18, 16, 17))+
+  coord_cartesian(ylim=c(0, 1.5))+
+  #scale_y_continuous(breaks = seq(0.90, 1.15, by = 0.05))+
+  labs(x="", y="Protein amount (fold change)")+
+  theme_classic2()+
+  theme(axis.line = element_line(color = "black", size=0.8), 
+        axis.text = element_text(color = "black", face="bold", size=12), 
+        axis.title = element_text(color = "black", face="bold"), 
+        legend.position = "none", legend.title = element_blank(), legend.text = element_text(size=12, face="bold"))+  
+  annotate("text", x=2, y=0.5, label="ANOVA\nP<0.001", size=3.5)
+```
+
+################################# 
+
+#### **Fig4C. stats**
+
+################################# 
+
+```{r, VCAM1 ANOVA, fig.height=4, fig.width=5}
+#mean(SD)
+WBDF %>% group_by(group) %>% summarize(mean=mean(adjv), sd=sd(adjv))
+
+#ANOVA and Tukey
+model<- aov(adjv ~ group, data = WBDF)
+model %>% summary()
+TukeyHSD(model)
+```
+
+#################################################################### 
+
+### [**7. VCAM1/LRP2 mRNA expression from ESBL**]{.underline}
+
+#################################################################### 
+
+```{r, VCAM1 and LRP2 from database, fig.height=4, fig.width=8}
+VC1_DATABASE <- read.csv("ESBL_data.csv") %>% filter(Gene.name=="vcam1"|Gene.name=="lrp2") %>% t() %>% as.data.frame() %>% subset(V2!="vcam1") %>% rename("VCAM1"=V2, "LRP2"=V1)
+VC1_DATABASE$VCAM1 <- VC1_DATABASE$VCAM1 %>% as.numeric()
+VC1_DATABASE$LRP2 <- VC1_DATABASE$LRP2 %>% as.numeric()
+VC1_DATABASE$cell <- str_sub(rownames(VC1_DATABASE), end = -4)
+
+mouse_ref <- c("mCTAL", "mCCD", "mPTS2", "Kidney", "Primary_Cell") 
+human_line <- c("HKC8", "HKC11", "HPTC.05.LTR", "HPTC.05.CLA", "HK2")
+mouse_line <- c("C57BL.6J")
+rat_line <- c("SHR", "WKY", "NRK.E52")
+opossum_line <- c("OKWT", "OKH", "OK.ATCC")
+pig_line <- c("LLC.PK1")
+dog_line <- c("MDCK")
+VC1_DATABASE$animal <-  ifelse(VC1_DATABASE$cell %in% human_line, "Human",
+                         ifelse(VC1_DATABASE$cell %in% mouse_line, "Mouse",
+                         ifelse(VC1_DATABASE$cell %in% mouse_ref, "Mouse_ref",
+                          ifelse(VC1_DATABASE$cell %in% rat_line, "Rat",
+                           ifelse(VC1_DATABASE$cell %in% opossum_line, "Opposum",
+                            ifelse(VC1_DATABASE$cell %in% pig_line, "Pig",
+                             ifelse(VC1_DATABASE$cell %in% dog_line, "Dog", NA)))))))
+
+
+VC1_DATABASE$animal <- factor(VC1_DATABASE$animal, levels = c("Mouse_ref", "Human", "Mouse", "Rat", "Opposum", "Pig", "Dog"))
+VC1_DATABASE$cell <- factor(VC1_DATABASE$cell, levels =  VC1_DATABASE %>% arrange(animal, cell) %>% .$cell %>% unique())
+```
+```{r, VCAM1 and LRP2 from database fig, include=F, fig.height=4, fig.width=8}
+#VCAM1 expression in any types of cells 
+REFAVE <- VC1_DATABASE %>% subset(animal=="Mouse_ref") %>% .$VCAM1 %>% mean()
+ggplot(VC1_DATABASE %>% subset(cell!="MDCK"), 
+       aes(cell, VCAM1/REFAVE, color=animal)) + 
+  geom_quasirandom() + geom_boxplot()+ theme_classic2()+ 
+  geom_hline(yintercept=0, linetype="dashed")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title.x = element_blank())+
+  scale_color_manual(values=c("black","red","darkgreen","blue","yellow4","purple4","blue"))+ggtitle("VCAM1")
+
+#LRP2 expression in any types of cells 
+REFAVE2 <- VC1_DATABASE %>% subset(animal=="Mouse_ref") %>% .$LRP2 %>% mean()
+ggplot(VC1_DATABASE %>% subset(cell!="MDCK"), 
+       aes(cell, LRP2/REFAVE2, color=animal)) + 
+  geom_quasirandom() + geom_boxplot()+ theme_classic2()+ 
+  geom_hline(yintercept=0, linetype="dashed")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title.x = element_blank())+
+  scale_color_manual(values=c("black","red","darkgreen","blue","yellow4","purple4","blue"))+ggtitle("LRP2")
+
+```
+
+######################################## 
+
+#### **Supplementary Fig2&4 \<- LRP2 and VCAM1 mRNA expression**
+
+######################################## 
+
+```{r, VCAM1 from database2, warning=F, fig.height=4, fig.width=5}
+VCAM1_DATABASE_Hs <-VC1_DATABASE %>% subset(animal=="Human")
+
+#VCAM1 expression in human PT cell lines 
+REFAVE <- VCAM1_DATABASE_Hs %>% .$VCAM1 %>% mean()
+VCAM1_DATABASE_Hs$VCAM1_fold <- VCAM1_DATABASE_Hs$VCAM1/REFAVE
+ggplot(VCAM1_DATABASE_Hs, 
+       aes(cell, VCAM1_fold, color=animal)) + theme_classic2()+ 
+  geom_boxplot()+ 
+  geom_quasirandom(position=position_jitter(height = 0), size=3, width=0.15, aes(shape=cell)) +
+  geom_hline(yintercept=1, linetype="dashed")+
+  theme(axis.line = element_line(color = "black", size=0.8), 
+        axis.text.x = element_text(angle = 45, hjust = 1, size=12, face="bold"),
+        axis.text.y = element_text(size=12, face="bold"),
+        axis.title.y = element_text(size=12, face="bold"),
+        axis.title.x = element_blank(),        
+        legend.position = "none",
+        plot.title = element_text(vjust=2.5, hjust=0.5, size=14, face="bold.italic"))+
+  scale_shape_manual(values=c(17, 16, 16, 16, 16))+
+  scale_color_manual(values=c("black","red","darkgreen","blue","yellow4","purple4","blue"))+
+  labs(y="mRNA expresion (fold change)", title = "VCAM1")+ annotate("text", x=4.8, y=2.5, label="ANOVA\nP=0.04", size=3.5)
+  
+#LRP2 expression in human PT cell lines 
+REFAVE2 <- VCAM1_DATABASE_Hs %>% .$LRP2 %>% mean()
+VCAM1_DATABASE_Hs$LRP2_fold <- VCAM1_DATABASE_Hs$LRP2/REFAVE2
+ggplot(VCAM1_DATABASE_Hs, 
+       aes(cell, LRP2_fold, color=animal)) + theme_classic2()+ 
+  geom_boxplot()+ 
+  geom_quasirandom(position=position_jitter(height = 0), size=3, width=0.15, aes(shape=cell)) +
+  geom_hline(yintercept=1, linetype="dashed")+
+  theme(axis.line = element_line(color = "black", size=0.8), 
+        axis.text.x = element_text(angle = 45, hjust = 1, size=12, face="bold"),
+        axis.text.y = element_text(size=12, face="bold"),
+        axis.title.y = element_text(size=12, face="bold"),
+        axis.title.x = element_blank(),        
+        legend.position = "none",
+        plot.title = element_text(vjust=2.5, hjust=0.5, size=14, face="bold.italic"))+
+  scale_shape_manual(values=c(17, 16, 16, 16, 16))+
+  scale_color_manual(values=c("black","red","darkgreen","blue","yellow4","purple4","blue"))+
+  labs(y="mRNA expresion (fold change)", title = "LRP2")+ annotate("text", x=3.8, y=2.5, label="ANOVA\nP=0.87", size=3.5)
+```
+
+################################################ 
+
+#### **Supplementary Fig2&4 stats.**
+
+################################################ 
+
+```{r, h_VCAM1 ANOVA, fig.height=4, include=T, fig.width=5}
+library(DescTools)
+#Summary of VCAM1/LRP2 results (mean+SD)
+VCAM1_DATABASE_Hs %>% group_by(cell) %>% summarise(VCAM1=paste0(round(mean(VCAM1_fold), digits=4)," (" , round(sd(VCAM1_fold), digits=4), ")"),
+                                                   LRP2=paste0(round(mean(LRP2_fold), digits=4)," (" , round(sd(LRP2_fold), digits=4), ")") )
+
+#p value with ANOVA (VCAM1)
+model<- aov(VCAM1_fold ~ cell, data = VCAM1_DATABASE_Hs)
+model %>% broom::tidy() %>% .[1, "p.value"]
+
+#post hoc analysis (VCAM1)
+DunnettTest(x= VCAM1_DATABASE_Hs %>% .$VCAM1_fold, g=VCAM1_DATABASE_Hs %>% .$cell)
+
+#p value with ANOVA (LRP2)
+model2<- aov(LRP2_fold ~ cell, data = VCAM1_DATABASE_Hs)
+model2 %>% broom::tidy() %>% .[1, "p.value"]
+
+#post hoc analysis (LRP2)
+#DunnettTest(x= VCAM1_DATABASE_Hs %>% .$LRP2_fold, g=VCAM1_DATABASE_Hs %>% .$cell)
+```
